@@ -8,7 +8,7 @@ SIMILARITY_THRESHOLD = 0.5
 
 
 if __name__ == '__main__':
-    image_file = r"C:\Users\Software\Desktop\MyData\Images\1662393.jpg"
+    image_file = r"Images/1249571.jpg"
     watermark_list = ["kala", "digikala", "photo by digikala.com"]
 
     detector = WatermarkDetector(image_file)

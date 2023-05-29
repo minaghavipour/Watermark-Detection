@@ -14,7 +14,8 @@ class WatermarkDetector:
     def __init__(self, file_name: str):
         self.image = cv2.imread(file_name, cv2.IMREAD_COLOR)
         self.original_image = self.image.copy()
-        self.boxes = None
+        self.txt_boxes = None
+        self.watermark_boxes = None
 
     @staticmethod
     def _image_padding(image: np.array) -> np.array:
@@ -79,24 +80,44 @@ class WatermarkDetector:
                 confidences.append(scoresData[x])
 
         boxes = non_max_suppression(np.array(boxes), probs=confidences)
-        self.boxes = list(np.multiply(boxes, [rW, rH, rW, rH]).astype(int))
-        return self.boxes
+        self.txt_boxes = list(np.multiply(boxes, [rW, rH, rW, rH]).astype(int))
+        return self.txt_boxes
 
-    def find_watermark(self, watermark_list: List[str], similarity_thr: float = 0.5) -> np.array:
+    def find_watermark(self, watermark_list: List[str], similarity_thr: float = 0.5) -> List[tuple]:
         # pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe"
         reader = Reader(['en'])
         watermark_boxes = []
-        for (startX, startY, endX, endY) in self.boxes:
+        for (startX, startY, endX, endY) in self.txt_boxes:
             txt_image = self.original_image[startY:endY, startX:endX]
 
             try:
+                txt_image = cv2.threshold(src=cv2.cvtColor(txt_image, cv2.COLOR_RGB2GRAY), thresh=0, maxval=255,
+                              type=cv2.THRESH_OTSU + cv2.THRESH_BINARY_INV)[1]
                 # txt = pytesseract.image_to_string(txt_img, lang="eng", config=CUSTOM_OEM_PSM_CONFIG)
                 extracted_txt = reader.readtext(txt_image, detail=0)[0]
             except:
                 continue
 
             extracted_txt = extracted_txt.strip().lower()
-            if max(list(map(self._jaccard_similarity, itertools.repeat(extracted_txt, len(watermark_list)),
-                            watermark_list))) >= similarity_thr:
-                cv2.rectangle(self.original_image, (startX, startY), (endX, endY), (0, 255, 0), 1)
+            similarities = list(map(self._jaccard_similarity, itertools.repeat(extracted_txt, len(watermark_list)),
+                                    watermark_list))
+            if max(similarities) >= similarity_thr:
+                index = np.argmax(similarities)
+                index = np.argmax(similarities[2:]) + 2 if index == 1 and startY > self.IMAGE_SIZE / 2 else index
+                watermark_boxes.append(((startX, startY, endX, endY), index))
+                # cv2.rectangle(self.original_image, (startX, startY), (endX, endY), (0, 255, 0), 1)
+        self.watermark_boxes = watermark_boxes
+        return self.watermark_boxes
+
+    def replace_watermark(self, replacement_list: List[str]) -> np.array:
+        for box, index in self.watermark_boxes:
+            startX, startY, endX, endY = box
+            if replacement_list[index]:
+                new_watermark = cv2.imread(replacement_list[index], cv2.IMREAD_COLOR)
+                endX, endY = max(endX, new_watermark.shape[1]), max(endY, new_watermark.shape[0]) + 3
+                self.original_image[endY - new_watermark.shape[0]:endY,
+                    endX - new_watermark.shape[1]:endX] = new_watermark
+            else:
+                color = self.original_image[max(0, startY - 1), max(0, startX - 1)]
+                self.original_image[startY:endY, startX:endX] = color
         return self.original_image

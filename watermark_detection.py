@@ -11,8 +11,8 @@ class WatermarkDetector:
     IMAGE_SIZE = 640
     CUSTOM_OEM_PSM_CONFIG = r'--oem 3 --psm 6'
 
-    def __init__(self, file_name: str):
-        self.image = cv2.imread(file_name, cv2.IMREAD_COLOR)
+    def __init__(self, image: np.array):
+        self.image = image
         self.original_image = self.image.copy()
         self.txt_boxes = None
         self.watermark_boxes = None
@@ -26,10 +26,17 @@ class WatermarkDetector:
         return result
 
     @staticmethod
-    def _jaccard_similarity(string1: str, string2: str) -> float:
-        intersection = len(list(set(string1).intersection(string2)))
-        union = (len(set(string1)) + len(set(string2))) - intersection
-        return float(intersection) / union
+    def _jaccard_similarity(extracted_txt: str, watermark: str) -> tuple:
+        key_list = watermark.split(' ')
+        similarities = []
+        for i in range(1, len(key_list) + 1):
+            for j in range(len(key_list) - i + 1):
+                key_phrase = ' '.join(key_list[j:j + i])
+                intersection = len(list(set(extracted_txt).intersection(key_phrase)))
+                union = (len(set(extracted_txt)) + len(set(key_phrase))) - intersection
+                similarities.append((key_phrase, float(intersection) / union))
+        sim_key, max_sim = similarities[np.argmax(list(zip(*similarities))[1])]
+        return sim_key, max_sim
 
     def detect_text(self, min_confidence: float = 0.5) -> List[tuple]:
         image = self._image_padding(self.image)
@@ -91,33 +98,38 @@ class WatermarkDetector:
             txt_image = self.original_image[startY:endY, startX:endX]
 
             try:
-                txt_image = cv2.threshold(src=cv2.cvtColor(txt_image, cv2.COLOR_RGB2GRAY), thresh=0, maxval=255,
-                              type=cv2.THRESH_OTSU + cv2.THRESH_BINARY_INV)[1]
-                # txt = pytesseract.image_to_string(txt_img, lang="eng", config=CUSTOM_OEM_PSM_CONFIG)
-                extracted_txt = reader.readtext(txt_image, detail=0)[0]
+                # cv2.imshow("Text Detection", txt_image)
+                # cv2.waitKey(0)
+                # # txt = pytesseract.image_to_string(txt_img, lang="eng", config=CUSTOM_OEM_PSM_CONFIG)
+                extracted_txt = reader.readtext(txt_image, detail=0)
+                if not extracted_txt:
+                    thr_image = cv2.threshold(src=cv2.cvtColor(txt_image, cv2.COLOR_RGB2GRAY), thresh=0, maxval=255,
+                                              type=cv2.THRESH_OTSU + cv2.THRESH_BINARY)[1]
+                    extracted_txt = reader.readtext(thr_image, detail=0)
+                extracted_txt = extracted_txt[0]
             except:
                 continue
 
             extracted_txt = extracted_txt.strip().lower()
-            similarities = list(map(self._jaccard_similarity, itertools.repeat(extracted_txt, len(watermark_list)),
-                                    watermark_list))
-            if max(similarities) >= similarity_thr:
-                index = np.argmax(similarities)
-                index = np.argmax(similarities[2:]) + 2 if index == 1 and startY > self.IMAGE_SIZE / 2 else index
-                watermark_boxes.append(((startX, startY, endX, endY), index))
-                # cv2.rectangle(self.original_image, (startX, startY), (endX, endY), (0, 255, 0), 1)
+            for watermark_index in range(len(watermark_list)):
+                key, similarity = self._jaccard_similarity(extracted_txt, watermark_list[watermark_index])
+                if similarity >= similarity_thr and (startY < self.IMAGE_SIZE * 0.5 or watermark_index):
+                    key_index = watermark_list[watermark_index].find(key)
+                    remaining_len = len(watermark_list[watermark_index]) - key_index - len(key)
+                    watermark_boxes.append(((startX, startY, endX, endY), watermark_index, remaining_len))
+                    # cv2.rectangle(self.original_image, (startX, startY), (endX, endY), (0, 255, 0), 1)
+                    break
         self.watermark_boxes = watermark_boxes
         return self.watermark_boxes
 
-    def replace_watermark(self, replacement_list: List[str]) -> np.array:
-        for box, index in self.watermark_boxes:
+    def replace_watermark(self, replacement_list: List[tuple]) -> np.array:
+        for box, watermark_index, remaining_len in self.watermark_boxes:
             startX, startY, endX, endY = box
-            if replacement_list[index]:
-                new_watermark = cv2.imread(replacement_list[index], cv2.IMREAD_COLOR)
-                endX, endY = max(endX, new_watermark.shape[1]), max(endY, new_watermark.shape[0]) + 3
-                self.original_image[endY - new_watermark.shape[0]:endY,
-                    endX - new_watermark.shape[1]:endX] = new_watermark
-            else:
-                color = self.original_image[max(0, startY - 1), max(0, startX - 1)]
-                self.original_image[startY:endY, startX:endX] = color
+            if watermark_index > 0:
+                replacement_list[watermark_index][:] = self.original_image[max(0, startY - 1), max(0, startX - 1)]
+            endX, endY = max(endX + remaining_len + 3, replacement_list[watermark_index].shape[1]), max(endY,
+                                                                     replacement_list[watermark_index].shape[0]) + 3
+            H, W = max(endY - startY, replacement_list[watermark_index].shape[0]), max(endX - startX,
+                                                                      replacement_list[watermark_index].shape[1])
+            self.original_image[endY - H:endY, endX - W:endX] = cv2.resize(replacement_list[watermark_index], (W, H))
         return self.original_image

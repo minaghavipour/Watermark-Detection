@@ -1,17 +1,23 @@
 import cv2
 import time
+import numpy as np
 from watermark_detection import WatermarkDetector
 
 MIN_CONFIDENCE = 0.5
 SIMILARITY_THRESHOLD = 0.5
 
 if __name__ == '__main__':
-    image_file = r"Images/1249571.jpg"
-    watermark_list = ["kala", "digikala", "copyright", "photo by", "digikala.com", "com"]
-    replacement_list = ["New_Watermarks/technolife_logo_small.png", "New_Watermarks/technolife_logo_small.png", "", "",
-                        "", ""]
+    image_file = r"Images/2815064.jpg"
+    image = cv2.imread(image_file, cv2.IMREAD_COLOR)
+    watermark_file = r"New_Watermarks/technolife_logo_small.png"
+    watermark = cv2.imread(watermark_file, cv2.IMREAD_COLOR)
+    cover = np.zeros((15, 180, 3))
 
-    detector = WatermarkDetector(image_file)
+    watermark_list = ["digi kala", "copyright photo by digikala com"]
+    # replacement_list = [(watermark, 0), (watermark, 0), (cover, 150), (cover, 100), (cover, 20), (cover, 0)]
+    replacement_list = [watermark, cover]
+
+    detector = WatermarkDetector(image)
     print("[INFO] loading text detection model ...")
     start = time.time()
     boxes = detector.detect_text(MIN_CONFIDENCE)

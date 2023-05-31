@@ -14,7 +14,6 @@ if __name__ == '__main__':
     cover = np.zeros((15, 180, 3))
 
     watermark_list = ["digi kala", "copyright photo by digikala com"]
-    # replacement_list = [(watermark, 0), (watermark, 0), (cover, 150), (cover, 100), (cover, 20), (cover, 0)]
     replacement_list = [watermark, cover]
 
     detector = WatermarkDetector(image)
@@ -29,9 +28,6 @@ if __name__ == '__main__':
     watermark_boxes = detector.find_watermark(watermark_list, SIMILARITY_THRESHOLD)
     end = time.time()
     print("[INFO] OCR took {:.6f} seconds".format(end - start))
-
-    # cv2.imshow("Text Detection", detector.original_image)
-    # cv2.waitKey(0)
 
     image = detector.replace_watermark(replacement_list)
     cv2.imshow("Text Detection", image)

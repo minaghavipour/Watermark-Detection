@@ -122,7 +122,7 @@ class WatermarkDetector:
         self.watermark_boxes = watermark_boxes
         return self.watermark_boxes
 
-    def replace_watermark(self, replacement_list: List[tuple]) -> np.array:
+    def replace_watermark(self, replacement_list: List[np.array]) -> np.array:
         new_watermarks = {}
         for box, watermark_index, remaining_len in self.watermark_boxes:
             startX, startY, endX, endY = box

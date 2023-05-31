@@ -7,7 +7,7 @@ MIN_CONFIDENCE = 0.5
 SIMILARITY_THRESHOLD = 0.5
 
 if __name__ == '__main__':
-    image_file = r"Images/2815064.jpg"
+    image_file = r"Images/114675907.jpg"
     image = cv2.imread(image_file, cv2.IMREAD_COLOR)
     watermark_file = r"New_Watermarks/technolife_logo_small.png"
     watermark = cv2.imread(watermark_file, cv2.IMREAD_COLOR)

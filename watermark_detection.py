@@ -115,7 +115,7 @@ class WatermarkDetector:
                 key, similarity = self._jaccard_similarity(extracted_txt, watermark_list[watermark_index])
                 if similarity >= similarity_thr and (startY < self.IMAGE_SIZE * 0.5 or watermark_index):
                     key_index = watermark_list[watermark_index].find(key)
-                    remaining_len = len(watermark_list[watermark_index]) - key_index - len(key)
+                    remaining_len = len(watermark_list[watermark_index]) - key_index - len(extracted_txt)
                     watermark_boxes.append(((startX, startY, endX, endY), watermark_index, remaining_len))
                     # cv2.rectangle(self.original_image, (startX, startY), (endX, endY), (0, 255, 0), 1)
                     break
@@ -123,13 +123,24 @@ class WatermarkDetector:
         return self.watermark_boxes
 
     def replace_watermark(self, replacement_list: List[tuple]) -> np.array:
+        new_watermarks = {}
         for box, watermark_index, remaining_len in self.watermark_boxes:
             startX, startY, endX, endY = box
             if watermark_index > 0:
                 replacement_list[watermark_index][:] = self.original_image[max(0, startY - 1), max(0, startX - 1)]
-            endX, endY = max(endX + remaining_len + 3, replacement_list[watermark_index].shape[1]), max(endY,
+            endX, endY = max(endX + remaining_len * 5 + 3, replacement_list[watermark_index].shape[1]), max(endY,
                                                                      replacement_list[watermark_index].shape[0]) + 3
             H, W = max(endY - startY, replacement_list[watermark_index].shape[0]), max(endX - startX,
-                                                                      replacement_list[watermark_index].shape[1])
+                                                                     replacement_list[watermark_index].shape[1])
+            if watermark_index not in new_watermarks:
+                new_watermarks[watermark_index] = []
+            new_watermarks[watermark_index].append((W, H, endX, endY))
+            # cv2.rectangle(self.original_image, (endX - W, endY - H), (endX, endY), (0, 255, 0), 1)
+            # cv2.imshow("Text Detection", self.original_image)
+            # cv2.waitKey(0)
+
+        for watermark_index in new_watermarks.keys():
+            box = np.max(new_watermarks[watermark_index], axis=0)
+            W, H, endX, endY = box
             self.original_image[endY - H:endY, endX - W:endX] = cv2.resize(replacement_list[watermark_index], (W, H))
         return self.original_image
